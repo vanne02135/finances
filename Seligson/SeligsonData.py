@@ -1,6 +1,7 @@
 import urllib2
 import pandas as pd
 import datetime
+import StringIO
 
 class SeligsonData:
 	def __init__(self):
@@ -27,13 +28,14 @@ class SeligsonData:
 	
 	def download(self):
 		url = self.urls[0]
-		csvdata = urllib2.urlopen("http://" + url)
-
-		df = pd.io.parsers.read_csv(csvdata, sep=";", parse_dates=[0], date_parser=self.mydateparser, names=["Date", url.split("/")[-1].split('.')[0]], index_col=0)
+		csvdata = urllib2.urlopen("http://" + url).read()
+		df = pd.io.parsers.read_csv(StringIO.StringIO(csvdata), sep=";", parse_dates=[0], date_parser=self.mydateparser, names=["Date", url.split("/")[-1].split('.')[0]], index_col=0)
 
 		for url in self.urls[1:]:
-			csvdata = urllib2.urlopen("http://" + url)
-			df2 = pd.io.parsers.read_csv(csvdata, sep=";", parse_dates=[0], date_parser=self.mydateparser, names=["Date", url.split("/")[-1].split('.')[0]], index_col=0)
+			csvdata = urllib2.urlopen("http://" + url).read()
+			if "ei valitettavasti" in csvdata:
+				continue
+			df2 = pd.io.parsers.read_csv(StringIO.StringIO(csvdata), sep=";", parse_dates=[0], date_parser=self.mydateparser, names=["Date", url.split("/")[-1].split('.')[0]], index_col=0)
 			df = df.join(df2)
 
 		return df
