@@ -64,7 +64,7 @@ def rolling_max(signal, window_length):
     return pd.rolling_apply(signal, window_length, max, min_periods=0)
 
 
-def drawdowns_example(funds):
+def drawdowns_example_plot(funds):
     # funds = SeligsonData().download()
     windowDays = 365
 
@@ -86,19 +86,49 @@ def drawdowns_example(funds):
         ax2.set_ylabel("52wk drawdown (%, green)")
         plt.show()
 
+def drawdowns_strategy_backtest(funds, stoploss_thresholds=[10, 15, 20, 25]):
+    # funds = SeligsonData().download()
+    # stoploss_thresholds: long position, when stoploss is under threshold 
+    windowDays = 365  # drawdown window size in days
+
+    fundnames = funds.keys()
+
+    drawdowns = funds.copy()
+    for name in fundnames:
+        print "Calculating drawdowns %s" % name
+        rollmax = rolling_max(funds[name].values, windowDays)
+        rolldd = rolling_dd(funds[name].values, windowDays)
+        drawdowns[name] = (rollmax - rolldd) / rollmax * 100 - 100
+    print "...done. Backtesting"
+    returns = funds.copy()
+    for name in fundnames:
+        # Use log returns
+        returns[name] = np.log(funds[name] / funds[name].shift(1))
+        cols = [name]
+        for stoploss in stoploss_thresholds:
+            col = "stoploss_%d" % stoploss
+            # long position, when drawdown (in %) more than stoploss threshold value
+            returns[col] = returns[name] * (drawdowns[name].shift(1).values < stoploss) * 1.0
+            cols.append(col)
+        returns[cols].dropna().cumsum().apply(np.exp).plot()
+        plt.legend(cols, loc="best")
+        plt.show()        
+        #plt.figure()
+        #ax1 = funds[name].plot()
+        #ax2 = drawdowns[name].plot(secondary_y=True)
+        #ax1.set_title("Seligson %s Fund" % name)
+        #ax1.grid()
+        #ax1.set_ylabel("Price (EUR, blue)")
+        #ax2.set_ylabel("52wk drawdown (%, green)")
+        #plt.show()
+
+
 if __name__ == "__main__":
-    np.random.seed(0)
-    n = 100
-    s = pd.Series(np.random.randn(n).cumsum())
+    import SeligsonData
+    funds = SeligsonData.SeligsonData().download()
 
-    window_length = 10
+    # Test long position on suomi fund, when 52wk drawdown is less than
+    # 13, 16, 19 % on different times
+    drawdowns_strategy_backtest(funds[["suomi"]], [13, 16, 19])    
 
-    rolling_dd = pd.rolling_apply(s, window_length, max_dd, min_periods=0)
-    df = pd.concat([s, rolling_dd], axis=1)
-    df.columns = ['s', 'rol_dd_%d' % window_length]
-    df.plot(linewidth=3, alpha=0.4)
-
-    my_rmdd = rolling_max_dd(s.values, window_length, min_periods=1)
-    plt.plot(my_rmdd, 'g.')
-
-    plt.show()
+    drawdowns_strategy_backtest(funds[["suomi"]][2012:], [13, 16, 19])
